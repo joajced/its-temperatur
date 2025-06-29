@@ -8,6 +8,7 @@
 #include "gpio.h"
 #include "bus_system.h"
 #include "display_output.h"
+#include "sensor_search.h"
 
 // Hard coded ROMs
 #define SENSOR1 (ROM) { 0x28, {0xf2, 0x54, 0x88, 0x0d, 0x00, 0x00}, 0x5d } // 0x5d00000d8854f228
@@ -38,111 +39,21 @@ int main()
 		
 		ROM romArray[MAX_SENSORS];
 		int sensorCount = 0;
-		int lastDiscrepancy = -1;
-		int currDiscrepancy = -1;
-		int lastDeviceFlag = 0;
 		
-		while (!lastDeviceFlag && sensorCount < MAX_SENSORS)
+		clearInternalArrays();
+		int res = owFirst();
+		if (res)
 		{
-			if (!reset())
-			{
-				printError(NO_SENSORS, 0);
-				break;
-			}
-			writeCommand(SEARCH_ROM);
-			
-			BYTE tempRom[8] = {0};
-			currDiscrepancy = -1;
-			
-			for (int bit = 0; bit < 64; bit++)
-			{
-				BYTE bitA = readBit();
-				BYTE bitB = readBit();
-				
-				if (bitA == 1 && bitB == 1) // Keine Sensoren
-				{
-					printError(NO_SENSORS, 0);
-					break;
-				}
-				else if (bitA != bitB) // Einheitliche Antwort
-				{
-					if (bitA)
-					{
-						writeHigh();
-						tempRom[bit / 8] |=  (1 << (bit % 8));
-					}
-					else
-					{
-						writeLow();
-						tempRom[bit / 8] &= ~(1 << (bit % 8));
-					}
-				}
-				else // Discrepancy
-				{
-					if (bit == lastDiscrepancy)
-					{
-						// Take the '1' path
-						writeHigh();
-						tempRom[bit / 8] |= (1 << (bit % 8));
-					}
-					else if (bit < lastDiscrepancy)
-					{
-						// Take the same path as last time (from last ROM number found)
-						BYTE tempByteArray[sizeof(ROM)];
-						memcpy(&tempByteArray, &romArray[sensorCount - 1], sizeof(ROM));
-						
-						BYTE direction = (tempByteArray[bit / 8] >> (bit % 8)) & 0x01;
-						
-						if (direction)
-						{
-							writeHigh();
-							tempRom[bit / 8] |= (1 << (bit % 8));
-						}
-						else
-						{
-							writeLow();
-							tempRom[bit / 8] &= ~(1 << (bit % 8));
-						}
-					}
-					else if (bit > lastDiscrepancy)
-					{
-						// Take the '0' path
-						writeLow();
-						tempRom[bit / 8] &= ~(1 << (bit % 8));
-						currDiscrepancy = bit;
-					}
-				}
-			}
-			
-			if (checkCrc(tempRom, 8))
-			{
-				memcpy(&romArray[sensorCount], tempRom, sizeof(ROM));
-				sensorCount++;
-			}
-			
-			lastDiscrepancy = currDiscrepancy;
-			if (lastDiscrepancy < 0)
-			{
-				lastDeviceFlag = 1;
-			}
+			copyResult((BYTE*) &romArray[sensorCount]);
+			sensorCount++;
+		}
+		while (res)
+		{
+			if (res = owNext()) copyResult((BYTE*) &romArray[sensorCount]);
+			sensorCount++;
 		}
 		
-		// Ausdrucken
-				
-		for (int i = 0; i < MAX_SENSORS; i++)
-		{
-			ROM currSensor = romArray[i];
-			
-			if (checkCrc((BYTE*) &currSensor, 8))
-			{
-				printSensorInfo(&currSensor, i);
-			}
-			else
-			{
-				printError(CRC_MISMATCH, i);
-				continue;
-			}
-		}
+		printSensorInfo(&romArray, sensorCount);
 		
 		// 2. Messung durchfuehren
 		

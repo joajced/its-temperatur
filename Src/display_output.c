@@ -6,7 +6,8 @@
 #define DS18B20_FAMCODE 0x28
 #define DS18S20_FAMCODE 0x10
 
-char sensorArray[MAX_SENSORS][27] = {0};
+BYTE lcdFamCodeArray[MAX_SENSORS] = {0};
+uint64_t lcdRomArray[MAX_SENSORS] = {0};
 
 void printHeaderRow()
 {
@@ -14,38 +15,45 @@ void printHeaderRow()
 	lcdPrintS("Sensor  PDROM              Temp. [C]");
 }
 
-void printSensorInfo(ROM *rom, int index)
+void printSensorInfo(ROM *romArray, int sensorCount)
 {
-	char line[27];
-	char* familyCode = "UNKNOWN";
-	
-	if (rom->familyCode == DS18B20_FAMCODE)
+	for (int i = 0; i < MAX_SENSORS; i++)
 	{
-		familyCode = "DS18B20";
-	}
-	else if (rom->familyCode == DS18S20_FAMCODE)
-	{
-		familyCode = "DS18S20";
-	}
-	else
-	{
-		strcpy(sensorArray[index], " ");
-		lcdGotoXY(0, 1 + index);
-		lcdPrintS(" ");
-		return;
-	}
-	
-	uint64_t serialNumber;
-  memcpy(&serialNumber, rom, sizeof(ROM));
-	
-	sprintf(line, "%s 0x%016llx", familyCode, (unsigned long long) serialNumber);
-	
-	// Wenn die Strings unterschiedlich sind
-	if (strcmp(line, sensorArray[index]))
-	{
-		strcpy(sensorArray[index], line);
-		lcdGotoXY(0, 1 + index);
-		lcdPrintS(line);
+		ROM currSensor = romArray[i];
+		
+		lcdGotoXY(0, 1 + i);
+		if (currSensor.familyCode == DS18B20_FAMCODE && lcdFamCodeArray[i] != 1)
+		{
+			lcdFamCodeArray[i] = 1;
+			lcdPrintS("DS18B20");
+		}
+		else if (currSensor.familyCode == DS18S20_FAMCODE && lcdFamCodeArray[i] != 2)
+		{
+			lcdFamCodeArray[i] = 2;
+			lcdPrintS("DS18S20");
+		}
+		else
+		{
+			lcdFamCodeArray[i] = 0;
+			if (i > sensorCount)
+			{
+				lcdPrintS(" ");
+			}
+			continue;
+		}
+		
+		uint64_t serialNumber;
+		memcpy(&serialNumber, &currSensor, sizeof(ROM));
+		
+		if (serialNumber != lcdRomArray[i])
+		{
+			memcpy(&lcdRomArray[i], &currSensor, sizeof(ROM)); // LCD-Ausgabe
+			
+			char* temp[27];
+			sprintf((char*) temp, "0x%016llx", (unsigned long long) serialNumber);
+			lcdGotoXY(8, 1 + i);
+			lcdPrintS((char*) temp);
+		}
 	}
 }
 
@@ -63,22 +71,17 @@ void printTemp(SCRATCHPAD *scratch, int index)
 
 void printError(char *msg, int index)
 {
-	// Wenn die Strings unterschiedlich sind
-	if (strcmp(msg, sensorArray[index]))
+}
+
+void clearInternalArrays()
+{
+	for (int i = 0; i < MAX_SENSORS; i++)
 	{
-		strcpy(sensorArray[index], msg);
-		lcdGotoXY(0, 1 + index);
-		lcdPrintS(msg);
-		
-		// Alle anderen Zeilen loeschen
-		if (!strcmp(msg, NO_SENSORS))
-		{
-			for (int i = 0; i < MAX_SENSORS - 2; i++)
-			{
-				strcpy(sensorArray[1 + i], " ");
-				lcdGotoXY(0, 2 + i);
-				lcdPrintS(" ");
-			}
-		}
+		lcdFamCodeArray[i] = 0;
+	}
+	
+	for (int i = 0; i < MAX_SENSORS; i++)
+	{
+		lcdRomArray[i] = 0;
 	}
 }

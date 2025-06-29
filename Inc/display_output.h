@@ -9,10 +9,12 @@
 
 void printHeaderRow();
 
-void printSensorInfo(ROM *rom, int index);
+void printSensorInfo(ROM *rom, int sensorCount);
 
 void printTemp(SCRATCHPAD *scratch, int index);
 
 void printError(char *msg, int index);
+
+void clearInternalArrays();
 
 #endif
